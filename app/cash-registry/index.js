@@ -269,12 +269,12 @@ export default function CashRegistry({ navigation }) {
       );
       loadCurrentShift();
 
-      printZReading({
+      /* printZReading({
         ...currentShift,
         ClosingCash: closingCash,
         ClosedAt: new Date().toISOString(),
         ExpectedCash: expectedCash,
-      });
+      });*/
     } catch (err) {
       console.error(err);
       Alert.alert("Error", "Failed to close shift.");
