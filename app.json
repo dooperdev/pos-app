@@ -3,7 +3,7 @@
     "name": "pos-app",
     "slug": "pos-app",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "landscape",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
@@ -20,10 +20,17 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.geooff.posapp"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": ["expo-sqlite"],
+    "extra": {
+      "eas": {
+        "projectId": "99f891e6-4604-4e7f-ab0d-3b712ca4c03d"
+      }
     }
   }
 }
