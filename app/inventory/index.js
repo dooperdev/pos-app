@@ -80,19 +80,38 @@ export default function Inventory() {
         onChangeText={setSearch}
         style={styles.search}
       />
-
+      {/* TABLE */}
       <View style={styles.table}>
+        {/* Table Header */}
+        <View style={styles.tableHeader}>
+          <Text style={[styles.headerCell, { flex: 2 }]}>Product Name</Text>
+          <Text style={[styles.headerCell, { flex: 1 }]}>Available Stock</Text>
+          <Text style={[styles.headerCell, { flex: 1, textAlign: "center" }]}>
+            Action
+          </Text>
+        </View>
+
+        {/* Table Data */}
         <FlatList
           data={filtered}
           keyExtractor={(item) => item.InventoryID.toString()}
           renderItem={({ item }) => (
             <View style={styles.row}>
-              <Text style={{ flex: 2 }}>{item.Name}</Text>
-              <Text style={{ flex: 1 }}>Stock: {item.QuantityInStock}</Text>
-
-              <TouchableOpacity onPress={() => requestUpdate(item)}>
-                <Text style={styles.edit}>Update</Text>
-              </TouchableOpacity>
+              <Text style={[styles.cell, { flex: 2 }]}>{item.Name}</Text>
+              <Text style={[styles.cell, { flex: 1 }]}>
+                {" "}
+                {item.QuantityInStock}{" "}
+              </Text>
+              <View
+                style={[
+                  styles.cell,
+                  { flex: 1, flexDirection: "row", justifyContent: "center" },
+                ]}
+              >
+                <TouchableOpacity onPress={() => requestUpdate(item)}>
+                  <Text style={styles.edit}>Update</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         />
@@ -152,6 +171,24 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 10,
   },
+  tableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#2979FF",
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  headerCell: {
+    color: "#fff",
+    fontWeight: "bold",
+    textAlign: "left",
+  },
+  cell: {
+    paddingVertical: 4,
+    paddingHorizontal: 5,
+  },
+
   row: {
     flexDirection: "row",
     paddingVertical: 12,
@@ -183,7 +220,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   saveBtn: {
-    backgroundColor: "#2E7D32",
+    backgroundColor: "#2979FF",
     padding: 14,
     borderRadius: 8,
     alignItems: "center",

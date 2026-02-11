@@ -57,6 +57,25 @@ export default function ActionModal({
               {/* PIN-protected */}
               <TouchableOpacity
                 style={styles.btn}
+                onPress={() => handleNavigate("Open Shift")}
+              >
+                <Text style={styles.btnText}>Open Shift</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.btn}
+                onPress={() => handleNavigate("Cash Registry", true)}
+              >
+                <Text style={styles.btnText}>Cash Registry</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.btn}
+                onPress={() => handleNavigate("Expenses")}
+              >
+                <Text style={styles.btnText}>Expenses</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.btn}
                 onPress={() => handleNavigate("Users", true)}
               >
                 <Text style={styles.btnText}>Users</Text>
@@ -93,7 +112,7 @@ export default function ActionModal({
 
               <TouchableOpacity
                 style={styles.btn}
-                onPress={() => handleNavigate("ActivityLogs", true)}
+                onPress={() => handleNavigate("Activity Logs", true)}
               >
                 <Text style={styles.btnText}>Activity Logs</Text>
               </TouchableOpacity>

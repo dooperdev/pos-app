@@ -27,7 +27,7 @@ export default function Login({ navigation }) {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert("Missing Fields", "Please enter email and password");
+      Alert.alert("Missing Fields", "Please enter username and password");
       return;
     }
 
@@ -108,7 +108,7 @@ export default function Login({ navigation }) {
         <Text style={styles.title}>Login</Text>
 
         <TextInput
-          placeholder="Email"
+          placeholder="Username"
           autoCapitalize="none"
           keyboardType="email-address"
           style={styles.input}

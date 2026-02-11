@@ -239,25 +239,44 @@ export default function ProductPage() {
 
       {/* TABLE */}
       <View style={styles.table}>
+        {/* Table Header */}
+        <View style={styles.tableHeader}>
+          <Text style={[styles.headerCell, { flex: 3 }]}>Product Name</Text>
+          <Text style={[styles.headerCell, { flex: 2 }]}>Price</Text>
+          <Text style={[styles.headerCell, { flex: 2, textAlign: "center" }]}>
+            Action
+          </Text>
+        </View>
+
+        {/* Table Data */}
         <FlatList
           data={filteredProducts}
           keyExtractor={(item) => item.ProductID.toString()}
           renderItem={({ item }) => (
             <View style={styles.row}>
-              <Text style={styles.cell}>{item.Name}</Text>
-              <Text style={styles.cell}>{item.SupplierName}</Text>
-              <Text style={styles.cell}>{item.CategoryName}</Text>
-              <Text style={styles.cell}>₱{item.RetailPrice}</Text>
+              <Text style={[styles.cell, { flex: 3 }]}>{item.Name}</Text>
+              <Text style={[styles.cell, { flex: 2 }]}>
+                ₱{item.RetailPrice}
+              </Text>
 
-              <TouchableOpacity onPress={() => requestPermission("edit", item)}>
-                <Text style={styles.edit}>Edit</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => requestPermission("delete", item)}
+              <View
+                style={[
+                  styles.cell,
+                  { flex: 2, flexDirection: "row", justifyContent: "center" },
+                ]}
               >
-                <Text style={styles.delete}>Delete</Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => requestPermission("edit", item)}
+                >
+                  <Text style={styles.edit}>Edit</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => requestPermission("delete", item)}
+                >
+                  <Text style={styles.delete}>Delete</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         />
@@ -387,6 +406,20 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 10,
   },
+  tableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#2979FF",
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  headerCell: {
+    color: "#fff",
+    fontWeight: "bold",
+    textAlign: "left",
+  },
+
   cell: { flex: 1 },
   edit: { color: "#FFA000", marginRight: 5 },
   delete: { color: "#D32F2F" },
@@ -418,7 +451,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   saveBtn: {
-    backgroundColor: "#2E7D32",
+    backgroundColor: "#2979FF",
     padding: 12,
     alignItems: "center",
     borderRadius: 6,

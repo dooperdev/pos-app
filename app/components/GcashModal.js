@@ -15,6 +15,7 @@ export default function GCashModal({ visible, total, onClose, onConfirm }) {
   useEffect(() => {
     if (!visible) {
       setReceived("");
+      setReference("");
     }
   }, [visible]);
   const receivedAmount = parseFloat(received) || 0;

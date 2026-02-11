@@ -166,23 +166,44 @@ export default function Suppliers({ currentUser }) {
 
       {/* Table */}
       <View style={styles.table}>
+        {/* Table Header */}
+        <View style={styles.tableHeader}>
+          <Text style={[styles.headerCell, { flex: 2 }]}>Name</Text>
+          <Text style={[styles.headerCell, { flex: 2 }]}>Contact</Text>
+          <Text style={[styles.headerCell, { flex: 2, textAlign: "center" }]}>
+            Action
+          </Text>
+        </View>
+
+        {/* Table Data */}
         <FlatList
           data={filtered}
           keyExtractor={(item) => item.SupplierID.toString()}
           renderItem={({ item }) => (
             <View style={styles.row}>
-              <Text style={styles.cell}>{item.Name}</Text>
-              <Text style={styles.cell}>{item.ContactInfo}</Text>
+              <Text style={[styles.cell, { flex: 2 }]}>{item.Name}</Text>
+              <Text style={[styles.cell, { flex: 2 }]}>
+                {item.ContactInfo || "-"}
+              </Text>
 
-              <TouchableOpacity onPress={() => requestPermission("EDIT", item)}>
-                <Text style={styles.edit}>Edit</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => requestPermission("DELETE", item)}
+              <View
+                style={[
+                  styles.cell,
+                  { flex: 2, flexDirection: "row", justifyContent: "center" },
+                ]}
               >
-                <Text style={styles.delete}>Delete</Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => requestPermission("EDIT", item)}
+                >
+                  <Text style={styles.edit}>Edit</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => requestPermission("DELETE", item)}
+                >
+                  <Text style={styles.delete}>Delete</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         />
@@ -267,6 +288,19 @@ const styles = StyleSheet.create({
   },
 
   table: { flex: 1, backgroundColor: "#fff", borderRadius: 12, padding: 10 },
+  tableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#2979FF",
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  headerCell: {
+    color: "#fff",
+    fontWeight: "bold",
+    textAlign: "left",
+  },
 
   row: {
     flexDirection: "row",
@@ -305,7 +339,7 @@ const styles = StyleSheet.create({
   },
 
   saveBtn: {
-    backgroundColor: "#2E7D32",
+    backgroundColor: "#2979FF",
     padding: 14,
     borderRadius: 8,
     alignItems: "center",

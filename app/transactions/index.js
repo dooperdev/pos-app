@@ -14,9 +14,10 @@ import {
 import { useFocusEffect } from "@react-navigation/native";
 import { useSQLiteContext } from "expo-sqlite";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import XLSX from "xlsx";
+import { generateReceiptText } from "../utils/receiptTemplate";
 
 export default function Transactions() {
   const db = useSQLiteContext();
@@ -28,6 +29,8 @@ export default function Transactions() {
   const [showPicker, setShowPicker] = useState(null); // "from" | "to"
   const [selectedTransactionProducts, setSelectedTransactionProducts] =
     useState([]);
+  const [selectedTransactionId, setSelectedTransactionId] = useState(null);
+
   const [productModalVisible, setProductModalVisible] = useState(false);
 
   const today = new Date();
@@ -112,9 +115,9 @@ export default function Transactions() {
     try {
       const products = await db.getAllAsync(
         `SELECT od.Quantity, od.UnitPrice, od.Discount, od.DiscountType, p.Name
-         FROM OrderDetails od
-         JOIN Products p ON od.ProductID = p.ProductID
-         WHERE od.TransactionID = ?`,
+       FROM OrderDetails od
+       JOIN Products p ON od.ProductID = p.ProductID
+       WHERE od.TransactionID = ?`,
         [transactionId],
       );
 
@@ -124,6 +127,7 @@ export default function Transactions() {
       }));
 
       setSelectedTransactionProducts(productsWithDiscount);
+      setSelectedTransactionId(transactionId); // <-- store transactionId
       setProductModalVisible(true);
     } catch (error) {
       console.error("Error loading sale products:", error);
@@ -156,7 +160,7 @@ export default function Transactions() {
       const fileUri = FileSystem.documentDirectory + "Transactions.xlsx";
 
       await FileSystem.writeAsStringAsync(fileUri, wbout, {
-        encoding: FileSystem.EncodingType.Base64, // <--- fixed here
+        encoding: "base64", // fixed for newer Expo
       });
 
       // Share the file
@@ -284,6 +288,7 @@ export default function Transactions() {
           <View style={styles.modalContainer}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Products in Sale</Text>
+
               <FlatList
                 data={selectedTransactionProducts}
                 keyExtractor={(item, index) => index.toString()}
@@ -302,12 +307,87 @@ export default function Transactions() {
                   </View>
                 )}
               />
-              <TouchableOpacity
-                style={styles.closeBtn}
-                onPress={() => setProductModalVisible(false)}
-              >
-                <Text style={{ color: "#fff" }}>Close</Text>
-              </TouchableOpacity>
+
+              {/* Buttons */}
+              <View style={{ flexDirection: "row", marginTop: 10, gap: 10 }}>
+                {/* Close Button */}
+                <TouchableOpacity
+                  style={[
+                    styles.closeBtn,
+                    { flex: 1, backgroundColor: "#2979FF" },
+                  ]}
+                  onPress={() => setProductModalVisible(false)} // <- simply closes the modal
+                >
+                  <Text style={{ color: "#fff", textAlign: "center" }}>
+                    Close
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Reprint Receipt Button */}
+                <TouchableOpacity
+                  style={[
+                    styles.closeBtn,
+                    { flex: 1, backgroundColor: "#4CAF50" },
+                  ]}
+                  onPress={() => {
+                    if (
+                      !selectedTransactionId ||
+                      !selectedTransactionProducts?.length
+                    ) {
+                      Alert.alert(
+                        "Error",
+                        "No transaction selected or no products available",
+                      );
+                      return;
+                    }
+
+                    const transaction = transactions.find(
+                      (t) => t.TransactionID === selectedTransactionId,
+                    );
+                    if (!transaction) {
+                      Alert.alert("Error", "Transaction not found");
+                      return;
+                    }
+
+                    const subtotal = selectedTransactionProducts.reduce(
+                      (acc, i) => acc + i.UnitPrice * i.Quantity,
+                      0,
+                    );
+                    const discount = selectedTransactionProducts.reduce(
+                      (acc, i) =>
+                        acc +
+                        (i.DiscountType === "₱"
+                          ? i.Discount
+                          : (i.Discount / 100) * i.UnitPrice * i.Quantity),
+                      0,
+                    );
+                    const total = subtotal - discount;
+
+                    const receiptText = generateReceiptText({
+                      cart: selectedTransactionProducts.map((p) => ({
+                        Name: p.Name,
+                        qty: p.Quantity,
+                        RetailPrice: p.UnitPrice,
+                        discount: p.Discount,
+                        discountType: p.DiscountType,
+                      })),
+                      subtotal,
+                      discount,
+                      total,
+                      payment: transaction.PaymentType,
+                      transactionNumber: transaction.TransactionNumber,
+                      userName: transaction.UserName,
+                    });
+
+                    // For now, just show the receipt text
+                    Alert.alert("Receipt Preview", receiptText);
+                  }}
+                >
+                  <Text style={{ color: "#fff", textAlign: "center" }}>
+                    Reprint Receipt
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </Modal>
@@ -361,7 +441,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   exportBtn: {
-    backgroundColor: "#4CAF50",
+    backgroundColor: "#2979FF",
     paddingVertical: 8,
     paddingHorizontal: 16,
     marginLeft: 6,
@@ -381,11 +461,14 @@ const styles = StyleSheet.create({
   },
   cell: { fontSize: 15, textAlign: "center" },
   headerRow: {
-    backgroundColor: "#F4F6FA",
-    borderBottomWidth: 2,
-    borderColor: "#000",
+    backgroundColor: "#2979FF", // new header color
   },
-  headerCell: { fontWeight: "bold", textAlign: "center" },
+  headerCell: {
+    fontWeight: "bold",
+    textAlign: "center",
+    color: "#fff", // text color white
+  },
+
   viewBtn: {
     backgroundColor: "#2979FF",
     paddingVertical: 6,

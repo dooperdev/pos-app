@@ -1,46 +1,34 @@
-export const generateReceiptHTML = ({
-  storeName = "MY STORE",
+export const generateReceiptText = ({
+  storeName = "Calle Otso",
   cart,
   subtotal,
   discount,
   total,
   payment,
+  transactionNumber,
+  userName = "POS User",
 }) => {
-  const items = cart
-    .map(
-      (i) =>
-        `<tr>
-          <td>${i.name}</td>
-          <td style="text-align:right">${i.qty} x ${i.price}</td>
-          <td style="text-align:right">${(i.qty * i.price).toFixed(2)}</td>
-        </tr>`,
-    )
-    .join("");
+  let receipt = "";
+  receipt += `\n${storeName}\n`;
+  receipt += `Transaction #: ${transactionNumber}\n`;
+  receipt += `Cashier: ${userName}\n`;
+  receipt += `------------------------------\n`;
 
-  return `
-  <html>
-    <body style="width:384px;font-family:monospace;font-size:12px">
-      <center>
-        <b>${storeName}</b><br/>
-        ------------------------------
-      </center>
+  cart.forEach((i) => {
+    const itemTotal = (
+      i.qty * Number(i.RetailPrice || 0) -
+      (i.discount || 0)
+    ).toFixed(2);
+    receipt += `${i.Name.substring(0, 15).padEnd(15)} ${i.qty} x ₱${Number(i.RetailPrice || 0).toFixed(2)}${i.discount ? `(D:${i.discountType}${i.discount})` : ""} ₱${itemTotal}\n`;
+  });
 
-      <table width="100%">
-        ${items}
-      </table>
+  receipt += `------------------------------\n`;
+  receipt += `Subtotal: ₱${subtotal.toFixed(2)}\n`;
+  receipt += `Discount: ₱${discount.toFixed(2)}\n`;
+  receipt += `TOTAL: ₱${total.toFixed(2)}\n`;
+  receipt += `Payment: ${payment}\n`;
+  receipt += `------------------------------\n`;
+  receipt += `THANK YOU!\n\n\n`;
 
-      ------------------------------
-      <p>Subtotal: ₱${subtotal.toFixed(2)}</p>
-      <p>Discount: ₱${discount.toFixed(2)}</p>
-      <p><b>TOTAL: ₱${total.toFixed(2)}</b></p>
-
-      ------------------------------
-      <p>Payment:</p>
-      <p>${payment}</p>
-
-      ------------------------------
-      <center>THANK YOU!</center>
-    </body>
-  </html>
-  `;
+  return receipt;
 };

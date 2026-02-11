@@ -2,7 +2,6 @@
 import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-
 import RegistrationForm from "./auth/register";
 import Login from "./auth/login";
 import Home from "./home/index";
@@ -15,7 +14,11 @@ import TransactionsPage from "./transactions/index";
 import UsersPage from "./users/index";
 import { AuthProvider } from "./context/AuthContext";
 import ActivityLogsPage from "./activity-logs/index";
-
+import ExpensesPage from "./expenses/index";
+import DashboardPage from "./dashboard/index";
+import CashRegistryPage from "./cash-registry/list";
+import OpenShiftPage from "./cash-registry/index";
+import XReadingPage from "./cash-registry/xreading";
 const Stack = createNativeStackNavigator();
 
 export default function Layout() {
@@ -115,6 +118,43 @@ export default function Layout() {
           FOREIGN KEY (SuspendID) REFERENCES SuspendSales(SuspendID)
         );
 
+        CREATE TABLE IF NOT EXISTS Expenses (
+            ExpenseID INTEGER PRIMARY KEY AUTOINCREMENT,
+            Title TEXT NOT NULL,
+            Amount REAL NOT NULL,
+            Notes TEXT,
+            CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS CashRegistry (
+          RegistryID INTEGER PRIMARY KEY AUTOINCREMENT,
+          OpenedBy INTEGER NOT NULL,                 -- User who started the shift
+          ClosedBy INTEGER,                          -- User who closed the shift
+          OpeningCash REAL NOT NULL,                 -- Starting money
+          ClosingCash REAL,                          -- End of duty input
+          ExpectedCash REAL DEFAULT 0,               -- Auto-calculated (system)
+          TotalCashSales REAL DEFAULT 0,             -- Auto added from transactions
+          TotalSplitCash REAL DEFAULT 0,             -- Cash part from split payments
+          TotalCashIn REAL DEFAULT 0,                -- Total cash added manually
+          TotalCashOut REAL DEFAULT 0,               -- Total cash removed manually
+          OpenedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+          ClosedAt DATETIME,
+          Status TEXT NOT NULL CHECK(Status IN ('OPEN','CLOSED')) DEFAULT 'OPEN',
+          FOREIGN KEY (OpenedBy) REFERENCES Users(UserID),
+          FOREIGN KEY (ClosedBy) REFERENCES Users(UserID)
+      );
+
+
+        CREATE TABLE IF NOT EXISTS CashMovements (
+            MovementID INTEGER PRIMARY KEY AUTOINCREMENT,
+            RegistryID INTEGER NOT NULL,
+            Type TEXT NOT NULL CHECK(Type IN ('IN','OUT')),
+            Amount REAL NOT NULL,
+            Reason TEXT,
+            CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (RegistryID) REFERENCES CashRegistry(RegistryID)
+        );
+
         `);
       }}
       options={{ useNewConnection: false }}
@@ -147,7 +187,12 @@ export default function Layout() {
             <Stack.Screen name="Inventory" component={InventoryPage} />
             <Stack.Screen name="Transactions" component={TransactionsPage} />
             <Stack.Screen name="Users" component={UsersPage} />
-            <Stack.Screen name="ActivityLogs" component={ActivityLogsPage} />
+            <Stack.Screen name="Activity Logs" component={ActivityLogsPage} />
+            <Stack.Screen name="Expenses" component={ExpensesPage} />
+            <Stack.Screen name="Dashboard" component={DashboardPage} />
+            <Stack.Screen name="Cash Registry" component={CashRegistryPage} />
+            <Stack.Screen name="Open Shift" component={OpenShiftPage} />
+            <Stack.Screen name="X Reading" component={XReadingPage} />
           </Stack.Navigator>
         </NavigationContainer>
       </AuthProvider>

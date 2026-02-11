@@ -16,131 +16,140 @@ import { useSQLiteContext } from "expo-sqlite";
 import PinPermissionModal from "../components/PinPermissionModal";
 import { logActivity } from "../utils/activityLogger";
 
-export default function Categories({ currentUser }) {
+export default function Expenses({ currentUser }) {
   const db = useSQLiteContext();
 
-  const [categories, setCategories] = useState([]);
+  const [expenses, setExpenses] = useState([]);
   const [search, setSearch] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
-  const [editingCategory, setEditingCategory] = useState(null);
+  const [editingExpense, setEditingExpense] = useState(null);
 
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
+  const [title, setTitle] = useState("");
+  const [amount, setAmount] = useState("");
+  const [notes, setNotes] = useState("");
 
   // PIN & Pending Action
   const [pinVisible, setPinVisible] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
 
   useEffect(() => {
-    loadCategories();
+    loadExpenses();
   }, []);
 
-  const loadCategories = async () => {
+  const loadExpenses = async () => {
     const result = await db.getAllAsync(
-      "SELECT * FROM Categories ORDER BY CategoryID DESC",
+      "SELECT * FROM Expenses ORDER BY ExpenseID DESC",
     );
-    setCategories(result);
+    setExpenses(result);
   };
 
-  const filtered = categories.filter((c) =>
-    c.Name.toLowerCase().includes(search.toLowerCase()),
+  const filtered = expenses.filter((e) =>
+    e.Title.toLowerCase().includes(search.toLowerCase()),
   );
 
   // ===== PIN REQUEST =====
-  const requestPermission = (type, category = null) => {
-    setPendingAction({ type, category });
+  const requestPermission = (type, expense = null) => {
+    setPendingAction({ type, expense });
     setPinVisible(true);
   };
 
   const handlePinSuccess = async () => {
     if (!pendingAction) return;
 
-    const { type, category } = pendingAction;
+    const { type, expense } = pendingAction;
     setPinVisible(false);
     setPendingAction(null);
 
     switch (type) {
       case "ADD":
-        setEditingCategory(null);
-        setName("");
-        setDescription("");
+        setEditingExpense(null);
+        setTitle("");
+        setAmount("");
+        setNotes("");
         setModalVisible(true);
         break;
       case "EDIT":
-        setEditingCategory(category);
-        setName(category.Name);
-        setDescription(category.Description || "");
+        setEditingExpense(expense);
+        setTitle(expense.Title);
+        setAmount(expense.Amount.toString());
+        setNotes(expense.Notes || "");
         setModalVisible(true);
         break;
       case "DELETE":
-        deleteCategoryFromDB(category);
+        deleteExpenseFromDB(expense);
         break;
     }
   };
 
-  // ===== SAVE CATEGORY =====
-  const saveCategory = async () => {
-    if (!name.trim()) {
-      Alert.alert("Validation", "Category name is required");
+  // ===== SAVE EXPENSE =====
+  const saveExpense = async () => {
+    if (!title.trim()) {
+      Alert.alert("Validation", "Expense title is required");
+      return;
+    }
+
+    if (!amount || isNaN(amount)) {
+      Alert.alert("Validation", "Valid amount is required");
       return;
     }
 
     try {
-      if (editingCategory) {
+      if (editingExpense) {
         // UPDATE
         await db.runAsync(
-          "UPDATE Categories SET Name=?, Description=? WHERE CategoryID=?",
-          [name, description, editingCategory.CategoryID],
+          "UPDATE Expenses SET Title=?, Amount=?, Notes=? WHERE ExpenseID=?",
+          [title, parseFloat(amount), notes, editingExpense.ExpenseID],
         );
 
         await logActivity(
           db,
           currentUser,
-          "Edit Category",
-          `Edited category ${editingCategory.Name} (${editingCategory.CategoryID})`,
+          "Edit Expense",
+          `Edited expense ${editingExpense.Title} (${editingExpense.ExpenseID})`,
         );
       } else {
         // INSERT
         await db.runAsync(
-          "INSERT INTO Categories (Name, Description) VALUES (?,?)",
-          [name, description],
+          "INSERT INTO Expenses (Title, Amount, Notes) VALUES (?,?,?)",
+          [title, parseFloat(amount), notes],
         );
 
         await logActivity(
           db,
           currentUser,
-          "Add Category",
-          `Added new category ${name}`,
+          "Add Expense",
+          `Added new expense ${title}`,
         );
       }
 
       setModalVisible(false);
-      setEditingCategory(null);
-      setName("");
-      setDescription("");
-      loadCategories();
+      setEditingExpense(null);
+      setTitle("");
+      setAmount("");
+      setNotes("");
+      loadExpenses();
     } catch (err) {
-      Alert.alert("Error", "Failed to save category.");
+      Alert.alert("Error", "Failed to save expense.");
     }
   };
 
-  // ===== DELETE CATEGORY =====
-  const deleteCategoryFromDB = async (category) => {
+  // ===== DELETE EXPENSE =====
+  const deleteExpenseFromDB = async (expense) => {
     try {
-      await db.runAsync("DELETE FROM Categories WHERE CategoryID=?", [
-        category.CategoryID,
+      await db.runAsync("DELETE FROM Expenses WHERE ExpenseID=?", [
+        expense.ExpenseID,
       ]);
 
       await logActivity(
         db,
         currentUser,
-        "Delete Category",
-        `Deleted category ${category.Name} (${category.CategoryID})`,
+        "Delete Expense",
+        `Deleted expense ${expense.Title} (${expense.ExpenseID})`,
       );
 
-      loadCategories();
+      loadExpenses();
     } catch (err) {
-      Alert.alert("Error", "Failed to delete category.");
+      Alert.alert("Error", "Failed to delete expense.");
     }
   };
 
@@ -149,7 +158,7 @@ export default function Categories({ currentUser }) {
       {/* Search + Add */}
       <View style={styles.topBar}>
         <TextInput
-          placeholder="Search category..."
+          placeholder="Search expense..."
           value={search}
           onChangeText={setSearch}
           style={styles.search}
@@ -161,40 +170,36 @@ export default function Categories({ currentUser }) {
           <Text style={{ color: "#fff" }}>+ Add</Text>
         </TouchableOpacity>
       </View>
-
-      {/* TABLE */}
-      <View style={styles.tableContainer}>
-        {/* TABLE HEADER */}
+      {/* Table */}
+      <View style={styles.table}>
+        {/* Table Header */}
         <View style={styles.tableHeader}>
-          <Text style={[styles.headerCell, { flex: 2 }]}>Name</Text>
-          <Text style={[styles.headerCell, { flex: 3 }]}>Description</Text>
-          <Text style={[styles.headerCell, { flex: 2, textAlign: "center" }]}>
-            Action
-          </Text>
+          <Text style={[styles.headerCell, { flex: 2 }]}>Title</Text>
+          <Text style={[styles.headerCell, { flex: 1 }]}>Amount</Text>
+          <Text style={[styles.headerCell, { flex: 2 }]}>Notes</Text>
+          <Text style={[styles.headerCell, { flex: 1.5 }]}>Action</Text>
         </View>
 
-        {/* TABLE DATA */}
+        {/* Expense Rows */}
         <FlatList
           data={filtered}
-          keyExtractor={(item) => item.CategoryID.toString()}
+          keyExtractor={(item) => item.ExpenseID.toString()}
           renderItem={({ item }) => (
-            <View style={styles.tableRow}>
-              <Text style={[styles.cell, { flex: 2 }]}>{item.Name}</Text>
-              <Text style={[styles.cell, { flex: 3 }]}>
-                {item.Description || "-"}
-              </Text>
+            <View style={styles.row}>
+              <Text style={[styles.cell, { flex: 2 }]}>{item.Title}</Text>
+              <Text style={[styles.cell, { flex: 1 }]}>₱{item.Amount}</Text>
+              <Text style={[styles.cell, { flex: 2 }]}>{item.Notes}</Text>
+
+              {/* Action buttons */}
               <View
                 style={[
                   styles.cell,
-                  {
-                    flex: 2,
-                    flexDirection: "row",
-                    justifyContent: "center",
-                  },
+                  { flex: 1.5, flexDirection: "row", justifyContent: "center" },
                 ]}
               >
                 <TouchableOpacity
                   onPress={() => requestPermission("EDIT", item)}
+                  style={{ marginRight: 10 }}
                 >
                   <Text style={styles.edit}>Edit</Text>
                 </TouchableOpacity>
@@ -220,24 +225,32 @@ export default function Categories({ currentUser }) {
             <View style={styles.modal}>
               <ScrollView>
                 <Text style={styles.title}>
-                  {editingCategory ? "Edit Category" : "Add Category"}
+                  {editingExpense ? "Edit Expense" : "Add Expense"}
                 </Text>
 
                 <TextInput
-                  placeholder="Category Name"
-                  value={name}
-                  onChangeText={setName}
+                  placeholder="Expense Title"
+                  value={title}
+                  onChangeText={setTitle}
                   style={styles.input}
                 />
 
                 <TextInput
-                  placeholder="Description"
-                  value={description}
-                  onChangeText={setDescription}
+                  placeholder="Amount"
+                  value={amount}
+                  onChangeText={setAmount}
+                  keyboardType="numeric"
                   style={styles.input}
                 />
 
-                <TouchableOpacity style={styles.saveBtn} onPress={saveCategory}>
+                <TextInput
+                  placeholder="Notes (optional)"
+                  value={notes}
+                  onChangeText={setNotes}
+                  style={styles.input}
+                />
+
+                <TouchableOpacity style={styles.saveBtn} onPress={saveExpense}>
                   <Text style={{ color: "#fff" }}>Save</Text>
                 </TouchableOpacity>
 
@@ -288,48 +301,41 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
 
-  tableContainer: {
-    flex: 1,
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-
+  table: { flex: 1, backgroundColor: "#fff", borderRadius: 12, padding: 10 },
   tableHeader: {
     flexDirection: "row",
-    backgroundColor: "#2979FF",
     paddingVertical: 12,
-    paddingHorizontal: 10,
+    borderBottomWidth: 2,
+    borderColor: "#ccc",
+    backgroundColor: "#2979FF",
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
   },
 
   headerCell: {
-    color: "#fff",
     fontWeight: "bold",
-    textAlign: "left",
+    fontSize: 16,
+    color: "#fff",
+    textAlign: "center",
+    paddingHorizontal: 5,
   },
 
-  tableRow: {
+  row: {
     flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
     paddingVertical: 12,
-    paddingHorizontal: 10,
+    borderBottomWidth: 1,
+    borderColor: "#eee",
     alignItems: "center",
   },
 
   cell: {
-    textAlign: "left",
-    color: "#333",
+    fontSize: 16,
+    textAlign: "center",
+    paddingHorizontal: 5,
   },
 
-  edit: {
-    color: "#FFA000",
-    marginRight: 15,
-  },
-
-  delete: {
-    color: "#D32F2F",
-  },
+  edit: { color: "#FF9800" },
+  delete: { color: "#D32F2F" },
 
   overlay: {
     flex: 1,
@@ -355,7 +361,7 @@ const styles = StyleSheet.create({
   },
 
   saveBtn: {
-    backgroundColor: "#2E7D32",
+    backgroundColor: "#2979FF",
     padding: 14,
     borderRadius: 8,
     alignItems: "center",

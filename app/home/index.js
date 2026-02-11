@@ -9,10 +9,11 @@ import {
   FlatList,
   Dimensions,
   Alert,
+  ScrollView,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { Picker } from "@react-native-picker/picker";
-import RNPrint from "react-native-print";
+import { BluetoothEscposPrinter } from "react-native-thermal-receipt-printer";
 import SidebarButton from "../components/SidebarButton";
 import CartModal from "../components/CartModal";
 import TenderModal from "../components/TenderModal";
@@ -22,11 +23,14 @@ import CashModal from "../components/CashModal";
 import GCashModal from "../components/GcashModal";
 import SplitTenderModal from "../components/SplitTenderModal";
 import SuspendSaleModal from "../components/SuspendSaleModal";
-import { generateReceiptHTML } from "../utils/receiptTemplate";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
+import * as FileSystem from "expo-file-system";
 import { useSQLiteContext } from "expo-sqlite";
 import { logActivity } from "../utils/activityLogger";
 import { useAuth } from "../context/AuthContext";
 import PinPermissionModal from "../components/PinPermissionModal";
+import { generateReceiptText } from "../utils/receiptTemplate";
 export default function Home({ navigation }) {
   const [cartVisible, setCartVisible] = useState(false);
   const [tenderVisible, setTenderVisible] = useState(false);
@@ -54,6 +58,21 @@ export default function Home({ navigation }) {
   const requestPermission = (type, payload = null) => {
     setPendingAction({ type, payload });
     setPinVisible(true);
+  };
+
+  const { logout } = useAuth();
+  const handleLogout = async () => {
+    if (user) {
+      await logActivity(db, user, "Logout", `User ${user.Name} logged out.`);
+    }
+    // 1. Call context logout
+    logout();
+
+    // 2. Reset navigation stack to Login
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "Login" }], // replace "Login" with your actual login screen name
+    });
   };
 
   const handlePinSuccess = async () => {
@@ -243,17 +262,31 @@ export default function Home({ navigation }) {
     setDiscountVisible(true);
   };
 
+  const saveReceiptAsPDF = async (receiptHTML, transactionNumber) => {
+    try {
+      const { uri } = await Print.printToFileAsync({
+        html: receiptHTML,
+      });
+
+      // Directly share without moving
+      await Sharing.shareAsync(uri);
+
+      Alert.alert("PDF Saved", "Receipt ready to share successfully.");
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Error", "Failed to save or share PDF.");
+    }
+  };
+
   const saveSale = async (paymentType, paymentData) => {
     try {
-      // --- 1. Generate TransactionNumber ---
+      // --- 1. Generate Transaction Number ---
       const today = new Date();
       const mm = String(today.getMonth() + 1).padStart(2, "0");
       const dd = String(today.getDate()).padStart(2, "0");
       const yyyy = today.getFullYear();
-
       const dateStr = `${mm}${dd}${yyyy}`;
 
-      // Count existing transactions today
       const todayTransactions = await db.getAllAsync(`
       SELECT COUNT(*) as count FROM SalesTransactions 
       WHERE date(TransactionDate) = date('now')
@@ -261,15 +294,13 @@ export default function Home({ navigation }) {
 
       const count = (todayTransactions[0]?.count || 0) + 1;
       const incremental = String(count).padStart(3, "0");
-
       const transactionNumber = `${dateStr}-${incremental}`;
 
       // --- 2. Insert into SalesTransactions ---
       await db.runAsync(
-        `INSERT INTO SalesTransactions 
-       (TransactionNumber, UserID, TotalAmount, PaymentType) 
+        `INSERT INTO SalesTransactions (TransactionNumber, UserID, TotalAmount, PaymentType) 
        VALUES (?, ?, ?, ?)`,
-        [transactionNumber, user.UserID, total, paymentType], // Replace 1 with actual UserID
+        [transactionNumber, user.UserID, total, paymentType],
       );
 
       // --- 3. Get last inserted TransactionID ---
@@ -280,7 +311,7 @@ export default function Home({ navigation }) {
 
       if (!transactionId) throw new Error("Failed to get TransactionID");
 
-      // --- 4. Insert each cart item into OrderDetails ---
+      // --- 4. Insert each cart item into OrderDetails & update inventory ---
       for (const item of cart) {
         const unitPrice = Number(item.RetailPrice) || 0;
         const quantity = item.qty || 1;
@@ -288,8 +319,7 @@ export default function Home({ navigation }) {
         const discountType = item.discountType || "₱";
 
         await db.runAsync(
-          `INSERT INTO OrderDetails 
-         (TransactionID, ProductID, Quantity, UnitPrice, Discount, DiscountType)
+          `INSERT INTO OrderDetails (TransactionID, ProductID, Quantity, UnitPrice, Discount, DiscountType)
          VALUES (?, ?, ?, ?, ?, ?)`,
           [
             transactionId,
@@ -308,33 +338,118 @@ export default function Home({ navigation }) {
         );
       }
 
-      console.log("Sale saved successfully!", transactionNumber);
+      // --- 5. Update CashRegistry if Cash / Split ---
+      if (paymentType === "Cash" || paymentType === "Split") {
+        const shifts = await db.getAllAsync(`
+    SELECT * FROM CashRegistry 
+    WHERE Status = 'OPEN' 
+    ORDER BY OpenedAt DESC 
+    LIMIT 1
+  `);
+        const shift = shifts[0];
 
-      // --- 5. Print receipt ---
-      if (RNPrint && RNPrint.print) {
-        await RNPrint.print({
-          html: generateReceiptHTML({
+        if (shift) {
+          let cashPaid = 0;
+          let gcashPaid = 0;
+
+          if (paymentType === "Cash") {
+            const match = paymentData.match(/Cash ₱([\d.]+)/);
+            cashPaid = match ? parseFloat(match[1]) : 0;
+          } else if (paymentType === "Split") {
+            const matchCash = paymentData.match(/Cash ₱([\d.]+)/);
+            const matchGCash = paymentData.match(/GCash ₱([\d.]+)/);
+            cashPaid = matchCash ? parseFloat(matchCash[1]) : 0;
+            gcashPaid = matchGCash ? parseFloat(matchGCash[1]) : 0;
+          }
+
+          const newExpectedCash =
+            (shift.OpeningCash || 0) + (shift.TotalCashSales || 0) + cashPaid; // Include only cash part
+
+          const newTotalCashSales = (shift.TotalCashSales || 0) + cashPaid;
+          const newTotalSplitCash = (shift.TotalSplitCash || 0) + gcashPaid;
+
+          await db.runAsync(
+            `UPDATE CashRegistry 
+       SET ExpectedCash = ?, 
+           TotalCashSales = ?, 
+           TotalSplitCash = ? 
+       WHERE RegistryID = ?`,
+            [
+              newExpectedCash,
+              newTotalCashSales,
+              newTotalSplitCash,
+              shift.RegistryID,
+            ],
+          );
+        }
+      }
+
+      // --- 6. Auto Print to Bluetooth Printer ---
+      // --- 6. Auto Print to Bluetooth Printer ---
+      try {
+        const printerList = await BluetoothEscposPrinter.getDeviceList();
+        const printer = printerList[0];
+
+        if (!printer) throw new Error("No Bluetooth printer found.");
+
+        await BluetoothEscposPrinter.connectPrinter(
+          printer.inner_mac_address || printer.mac_address,
+        );
+
+        await BluetoothEscposPrinter.printText(
+          generateReceiptText({
             cart,
             subtotal,
             discount: discountTotal,
             total,
             payment: paymentData,
-            transactionNumber, // pass to receipt
+            transactionNumber,
+            userName: user?.Name,
+            storeName: "Calle Otso", // optional, default is Calle Otso
           }),
-        });
+          { encoding: "GBK" },
+        );
+
+        await BluetoothEscposPrinter.openDrawer(0, 250);
+        await BluetoothEscposPrinter.disconnectPrinter();
+      } catch (printError) {
+        console.error("Printing error:", printError);
+
+        Alert.alert(
+          "Printing Failed",
+          "Bluetooth printing failed. Do you want to save the receipt as PDF instead?",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Save as PDF",
+              onPress: () =>
+                saveReceiptAsPDF(
+                  generateReceiptText({
+                    cart,
+                    subtotal,
+                    discount: discountTotal,
+                    total,
+                    payment: paymentData,
+                    transactionNumber,
+                    userName: user?.Name,
+                  }),
+                  transactionNumber,
+                ),
+            },
+          ],
+        );
       }
 
-      // --- 6. Clear cart ---
+      // --- 7. Clear Cart ---
       emptyCart();
 
-      // --- 7. Show success message ---
       Alert.alert(
         "Transaction Complete",
-        "Payment was successfully processed.",
-        [{ text: "OK" }],
+        "Sale saved & printed automatically.",
       );
     } catch (error) {
       console.error("Error saving sale:", error);
+      Alert.alert("Error", error.message || "Failed to save and print sale.");
     }
   };
 
@@ -391,20 +506,32 @@ export default function Home({ navigation }) {
     <View style={styles.container}>
       {/* LEFT SIDEBAR */}
       <View style={styles.sidebar}>
-        <SidebarButton
-          label="Empty Cart"
-          onPress={() => requestPermission("EMPTY_CART")}
-        />
-        <SidebarButton
-          label="Suspend Sale"
-          onPress={() => requestPermission("SUSPEND_SALE")}
-        />
-        <SidebarButton label="Actions" onPress={() => setActionVisible(true)} />
-        <SidebarButton
-          label="Transactions"
-          onPress={() => navigation.navigate("Transactions")}
-        />
-        <SidebarButton label="Logout" primary />
+        <ScrollView contentContainerStyle={{ paddingVertical: 10 }}>
+          <SidebarButton
+            label="Dashboard"
+            onPress={() => navigation.navigate("Dashboard")}
+          />
+          <SidebarButton
+            label="Empty Cart"
+            onPress={() => requestPermission("EMPTY_CART")}
+          />
+          <SidebarButton
+            label="Suspend Sale"
+            onPress={() => requestPermission("SUSPEND_SALE")}
+          />
+          <SidebarButton
+            label="Actions"
+            onPress={() => setActionVisible(true)}
+          />
+          <SidebarButton
+            label="Transactions"
+            onPress={() => navigation.navigate("Transactions")}
+          />
+          {/* add spacing before logout */}
+          <View style={{ marginTop: 20 }}>
+            <SidebarButton label="Logout" primary onPress={handleLogout} />
+          </View>
+        </ScrollView>
       </View>
 
       {/* MAIN CONTENT */}
@@ -447,16 +574,40 @@ export default function Home({ navigation }) {
         </Picker>
 
         {/* PRODUCT LIST */}
+        {/* PRODUCT LIST */}
         <View style={styles.table}>
-          <View style={styles.table}>
-            <FlatList
-              data={filteredProducts}
-              keyExtractor={(item) => item.ProductID.toString()}
-              renderItem={({ item }) => (
-                <View style={styles.row}>
-                  <Text style={styles.cell}>{item.Name}</Text>
-                  <Text style={styles.cell}>₱{item.RetailPrice}</Text>
+          {/* Table Header */}
+          <View style={styles.tableHeader}>
+            <Text style={[styles.headerCell, { flex: 3, minWidth: 150 }]}>
+              Product Name
+            </Text>
+            <Text style={[styles.headerCell, { flex: 1, minWidth: 80 }]}>
+              Price
+            </Text>
+            <Text style={[styles.headerCell, { flex: 1, minWidth: 80 }]}>
+              Action
+            </Text>
+          </View>
 
+          {/* Product Rows */}
+          <FlatList
+            data={filteredProducts}
+            keyExtractor={(item) => item.ProductID.toString()}
+            renderItem={({ item }) => (
+              <View style={styles.row}>
+                <Text style={[styles.cell, { flex: 3, minWidth: 150 }]}>
+                  {item.Name}
+                </Text>
+                <Text style={[styles.cell, { flex: 1, minWidth: 80 }]}>
+                  ₱{item.RetailPrice}
+                </Text>
+                <View
+                  style={{
+                    flex: 1,
+                    minWidth: 80,
+                    alignItems: "center",
+                  }}
+                >
                   <TouchableOpacity
                     style={[
                       styles.addBtn,
@@ -470,9 +621,9 @@ export default function Home({ navigation }) {
                     </Text>
                   </TouchableOpacity>
                 </View>
-              )}
-            />
-          </View>
+              </View>
+            )}
+          />
         </View>
 
         {/* BOTTOM SUMMARY */}
@@ -636,17 +787,36 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 10,
   },
+  tableHeader: {
+    flexDirection: "row",
+    paddingVertical: 12,
+    borderBottomWidth: 2,
+    borderColor: "#ccc",
+    backgroundColor: "#2979FF",
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+
+  headerCell: {
+    fontWeight: "bold",
+    fontSize: 16,
+    color: "#fff",
+    textAlign: "center",
+  },
+
   row: {
     flexDirection: "row",
-    justifyContent: "space-between",
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderColor: "#eee",
     alignItems: "center",
   },
+
   cell: {
     fontSize: 16,
+    textAlign: "center",
   },
+
   bottomBar: {
     flexDirection: "row",
     justifyContent: "space-between",
